@@ -20,6 +20,10 @@ The arc is the solstice itself — from dark to light — and the move beyond im
 
 <!-- EMBED VIDEO HERE. Script the demo so the climax is Level 5: buttons gone, machine deciding alone, board flooding with light. Add a voiceover explaining the teach→corrupt→autonomy loop. ~90 seconds. -->
 
+## Live Demo
+
+Play it here: https://after-turing-rho.vercel.app
+
 ## How It Plays
 
 Five levels, 5–8 minutes:
