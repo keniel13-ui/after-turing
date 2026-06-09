@@ -1,0 +1,6 @@
+gemini-proxy/
+*.md
+LICENSE
+.env*
+.git/
+.gitignore

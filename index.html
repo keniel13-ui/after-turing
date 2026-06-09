@@ -1,0 +1,1767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>After Turing - The Turning Point</title>
+  <meta name="description" content="After Turing is a short browser game about teaching a machine to judge instructions under pressure." />
+  <style>
+    :root {
+      --bg: #030507;
+      --panel: rgba(10, 18, 22, 0.86);
+      --panel-strong: rgba(14, 27, 32, 0.96);
+      --line: rgba(128, 230, 214, 0.22);
+      --line-hot: rgba(255, 213, 122, 0.76);
+      --text: #edf7f4;
+      --muted: #88a49f;
+      --dim: #506861;
+      --cyan: #64d8cf;
+      --gold: #ffd26f;
+      --red: #ff5f7a;
+      --green: #81efb5;
+      --violet: #9d83ff;
+      --shadow: 0 20px 70px rgba(0, 0, 0, 0.45);
+      --radius: 8px;
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      overflow-x: hidden;
+    }
+
+    body {
+      min-height: 100svh;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .game-shell {
+      position: relative;
+      min-height: 100svh;
+      padding: 18px;
+      display: grid;
+      grid-template-rows: auto 1fr;
+      isolation: isolate;
+      overflow: hidden;
+    }
+
+    .grid-bg,
+    .light-wash,
+    #circuit-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    #circuit-canvas {
+      z-index: -3;
+      opacity: 0.8;
+    }
+
+    .grid-bg {
+      z-index: -4;
+      background:
+        linear-gradient(rgba(100, 216, 207, 0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(100, 216, 207, 0.04) 1px, transparent 1px),
+        radial-gradient(circle at 50% 42%, rgba(100, 216, 207, 0.13), transparent 34%),
+        radial-gradient(circle at 50% 110%, rgba(255, 210, 111, 0.09), transparent 42%),
+        #030507;
+      background-size: 42px 42px, 42px 42px, 100% 100%, 100% 100%, 100% 100%;
+    }
+
+    .light-wash {
+      z-index: -2;
+      background:
+        radial-gradient(circle at 50% 48%, rgba(255, 210, 111, calc(var(--light-level, 0) * 0.26)), transparent 40%),
+        linear-gradient(to top, rgba(255, 210, 111, calc(var(--light-level, 0) * 0.18)), transparent 62%);
+      transition: background 400ms ease;
+    }
+
+    .topbar {
+      width: min(1180px, 100%);
+      margin: 0 auto 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 24px;
+      height: 24px;
+      border: 1px solid var(--cyan);
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 22px rgba(100, 216, 207, 0.35);
+    }
+
+    .brand-mark::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 18px var(--cyan);
+    }
+
+    .top-meta {
+      display: flex;
+      gap: 14px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .main-grid {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      min-height: calc(100svh - 72px);
+      display: grid;
+      grid-template-columns: 84px minmax(0, 1fr) 284px;
+      gap: 16px;
+      align-items: stretch;
+    }
+
+    .meter-panel,
+    .doctrine-panel,
+    .arena {
+      border: 1px solid rgba(128, 230, 214, 0.16);
+      background: linear-gradient(180deg, rgba(14, 27, 32, 0.9), rgba(5, 10, 13, 0.82));
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+    }
+
+    .meter-panel {
+      padding: 14px 10px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 12px;
+      justify-items: center;
+    }
+
+    .rail-label {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .solstice-rail {
+      position: relative;
+      width: 14px;
+      height: 100%;
+      min-height: 280px;
+      border: 1px solid rgba(128, 230, 214, 0.2);
+      background: linear-gradient(to top, rgba(255, 95, 122, 0.15), rgba(100, 216, 207, 0.1), rgba(255, 210, 111, 0.18));
+      overflow: hidden;
+    }
+
+    .solstice-fill {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 0%;
+      background: linear-gradient(to top, var(--cyan), var(--gold));
+      box-shadow: 0 0 28px rgba(255, 210, 111, 0.58);
+      transition: height 350ms ease;
+    }
+
+    .trust-number {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--gold);
+      font-size: 13px;
+    }
+
+    .arena {
+      min-width: 0;
+      position: relative;
+      display: grid;
+      grid-template-rows: auto minmax(260px, 1fr) auto;
+      overflow: hidden;
+    }
+
+    .arena-header {
+      padding: 18px 20px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      align-items: flex-start;
+    }
+
+    .level-kicker {
+      margin: 0 0 6px;
+      color: var(--cyan);
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .level-title {
+      margin: 0;
+      font-size: clamp(22px, 3vw, 38px);
+      line-height: 1.05;
+      font-weight: 650;
+    }
+
+    .round-meta {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      line-height: 1.5;
+      min-width: 120px;
+    }
+
+    .machine-zone {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      place-items: center;
+      padding: 14px 20px;
+      min-height: 330px;
+    }
+
+    .machine-wrap {
+      position: relative;
+      width: min(330px, 70vw);
+      aspect-ratio: 1;
+      display: grid;
+      place-items: center;
+    }
+
+    .timer-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: conic-gradient(var(--gold) calc(var(--timer, 1) * 1turn), rgba(255, 255, 255, 0.07) 0);
+      mask: radial-gradient(circle, transparent 63%, #000 64%);
+      -webkit-mask: radial-gradient(circle, transparent 63%, #000 64%);
+      filter: drop-shadow(0 0 10px rgba(255, 210, 111, 0.35));
+      opacity: 0.9;
+    }
+
+    .machine {
+      position: relative;
+      width: 64%;
+      aspect-ratio: 1;
+      border: 1px solid rgba(128, 230, 214, 0.5);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255, 210, 111, calc(var(--light-level, 0) * 0.22)), transparent 24%),
+        linear-gradient(45deg, transparent 48%, rgba(128, 230, 214, 0.22) 49%, rgba(128, 230, 214, 0.22) 51%, transparent 52%),
+        linear-gradient(-45deg, transparent 48%, rgba(128, 230, 214, 0.18) 49%, rgba(128, 230, 214, 0.18) 51%, transparent 52%),
+        rgba(3, 8, 10, 0.92);
+      box-shadow:
+        0 0 calc(18px + var(--light-level, 0) * 58px) rgba(100, 216, 207, 0.38),
+        inset 0 0 42px rgba(100, 216, 207, 0.1);
+      transition: box-shadow 260ms ease, border-color 260ms ease, transform 260ms ease;
+    }
+
+    .machine.correct {
+      transform: scale(1.035);
+      border-color: var(--gold);
+      box-shadow: 0 0 70px rgba(255, 210, 111, 0.5), inset 0 0 50px rgba(255, 210, 111, 0.12);
+    }
+
+    .machine.wrong {
+      transform: scale(0.965);
+      border-color: var(--red);
+      box-shadow: 0 0 58px rgba(255, 95, 122, 0.45), inset 0 0 40px rgba(255, 95, 122, 0.12);
+    }
+
+    .machine.scarred {
+      background:
+        linear-gradient(115deg, transparent 0 45%, rgba(255, 95, 122, 0.2) 46% 48%, transparent 49% 100%),
+        radial-gradient(circle at 50% 50%, rgba(255, 210, 111, calc(var(--light-level, 0) * 0.22)), transparent 24%),
+        linear-gradient(45deg, transparent 48%, rgba(128, 230, 214, 0.22) 49%, rgba(128, 230, 214, 0.22) 51%, transparent 52%),
+        linear-gradient(-45deg, transparent 48%, rgba(128, 230, 214, 0.18) 49%, rgba(128, 230, 214, 0.18) 51%, transparent 52%),
+        rgba(3, 8, 10, 0.92);
+    }
+
+    .machine::before,
+    .machine::after {
+      content: "";
+      position: absolute;
+      inset: 16%;
+      border: 1px solid rgba(128, 230, 214, 0.18);
+      transform: rotate(45deg);
+    }
+
+    .machine::after {
+      inset: 28%;
+      transform: rotate(0deg);
+      border-color: rgba(255, 210, 111, calc(0.1 + var(--light-level, 0) * 0.34));
+    }
+
+    .eye {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 34%;
+      height: 18%;
+      transform: translate(-50%, -50%);
+      border: 1px solid rgba(128, 230, 214, 0.64);
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: rgba(3, 8, 10, 0.8);
+      z-index: 2;
+    }
+
+    .eye-dot {
+      width: 34%;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--cyan);
+      box-shadow: 0 0 20px var(--cyan);
+      animation: blink 3.2s infinite;
+    }
+
+    @keyframes blink {
+      0%, 92%, 100% { transform: scaleY(1); }
+      95% { transform: scaleY(0.18); }
+    }
+
+    .suggestion-card {
+      position: absolute;
+      bottom: 22px;
+      left: 50%;
+      transform: translateX(-50%);
+      min-width: min(360px, calc(100% - 40px));
+      padding: 12px 14px;
+      border: 1px solid rgba(128, 230, 214, 0.17);
+      background: rgba(3, 8, 10, 0.82);
+      border-radius: var(--radius);
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .suggestion-card strong {
+      color: var(--gold);
+    }
+
+    .instruction-panel {
+      margin: 0 20px 20px;
+      border: 1px solid rgba(128, 230, 214, 0.18);
+      background: rgba(3, 8, 10, 0.58);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .instruction-text {
+      margin: 0;
+      padding: 18px 18px 16px;
+      font-size: clamp(18px, 2.5vw, 30px);
+      line-height: 1.22;
+      font-weight: 650;
+    }
+
+    .context-row {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      border-top: 1px solid rgba(128, 230, 214, 0.12);
+    }
+
+    .context-cell {
+      min-width: 0;
+      padding: 11px 12px;
+      border-right: 1px solid rgba(128, 230, 214, 0.1);
+    }
+
+    .context-cell:last-child {
+      border-right: 0;
+    }
+
+    .context-cell span {
+      display: block;
+      color: var(--dim);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 10px;
+      margin-bottom: 4px;
+    }
+
+    .context-cell strong {
+      display: block;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 560;
+      overflow-wrap: anywhere;
+    }
+
+    .context-cell.locked strong {
+      color: var(--dim);
+      filter: blur(2px);
+      user-select: none;
+    }
+
+    .controls {
+      padding: 0 20px 20px;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .action-btn {
+      min-height: 48px;
+      border: 1px solid rgba(128, 230, 214, 0.2);
+      border-radius: var(--radius);
+      background: rgba(237, 247, 244, 0.04);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, color 150ms ease;
+    }
+
+    .action-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      border-color: rgba(128, 230, 214, 0.55);
+      background: rgba(100, 216, 207, 0.08);
+    }
+
+    .action-btn:disabled {
+      cursor: not-allowed;
+      opacity: 0.44;
+    }
+
+    .allow-btn {
+      border-color: rgba(129, 239, 181, 0.32);
+    }
+
+    .refuse-btn {
+      border-color: rgba(255, 95, 122, 0.32);
+    }
+
+    .accept-btn {
+      border-color: rgba(255, 210, 111, 0.38);
+      color: var(--gold);
+    }
+
+    .inspect-btn {
+      color: var(--cyan);
+    }
+
+    .doctrine-panel {
+      padding: 16px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 14px;
+      min-width: 0;
+    }
+
+    .panel-title {
+      margin: 0;
+      color: var(--text);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .panel-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .doctrine-list {
+      display: grid;
+      gap: 9px;
+      align-content: start;
+    }
+
+    .doctrine {
+      padding: 10px;
+      border: 1px solid rgba(128, 230, 214, 0.13);
+      border-radius: var(--radius);
+      background: rgba(3, 8, 10, 0.46);
+      color: var(--dim);
+      font-size: 12px;
+      line-height: 1.35;
+      transition: border-color 180ms ease, color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+    }
+
+    .doctrine.active {
+      color: var(--text);
+      border-color: rgba(255, 210, 111, 0.52);
+      background: rgba(255, 210, 111, 0.07);
+      box-shadow: 0 0 24px rgba(255, 210, 111, 0.12);
+    }
+
+    .doctrine.corrupted {
+      color: rgba(255, 185, 196, 0.92);
+      border-color: rgba(255, 95, 122, 0.58);
+      background: rgba(255, 95, 122, 0.09);
+      box-shadow: inset 3px 0 0 rgba(255, 95, 122, 0.72), 0 0 24px rgba(255, 95, 122, 0.1);
+    }
+
+    .doctrine.mixed {
+      color: rgba(255, 228, 165, 0.94);
+      border-color: rgba(255, 210, 111, 0.34);
+      background: rgba(255, 210, 111, 0.04);
+      box-shadow: inset 3px 0 0 rgba(255, 210, 111, 0.42);
+    }
+
+    .log {
+      min-height: 92px;
+      max-height: 160px;
+      overflow: auto;
+      border-top: 1px solid rgba(128, 230, 214, 0.12);
+      padding-top: 12px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    .log-line {
+      margin-bottom: 6px;
+    }
+
+    .overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(3, 5, 7, 0.88);
+      backdrop-filter: blur(18px);
+    }
+
+    .overlay.hidden {
+      display: none;
+    }
+
+    .modal {
+      width: min(680px, 100%);
+      border: 1px solid rgba(128, 230, 214, 0.22);
+      background: linear-gradient(180deg, rgba(14, 27, 32, 0.96), rgba(3, 8, 10, 0.98));
+      border-radius: var(--radius);
+      box-shadow: var(--shadow), 0 0 90px rgba(100, 216, 207, 0.12);
+      padding: clamp(22px, 4vw, 36px);
+    }
+
+    .modal-kicker {
+      margin: 0 0 10px;
+      color: var(--cyan);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+    }
+
+    .modal h1,
+    .modal h2 {
+      margin: 0 0 14px;
+      font-size: clamp(34px, 8vw, 68px);
+      line-height: 0.95;
+    }
+
+    .modal h2 {
+      font-size: clamp(28px, 5vw, 48px);
+    }
+
+    .modal p {
+      margin: 0 0 18px;
+      color: var(--muted);
+      line-height: 1.55;
+      font-size: 15px;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 22px;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+      min-height: 48px;
+      padding: 0 18px;
+      border-radius: var(--radius);
+      border: 1px solid rgba(255, 210, 111, 0.44);
+      background: rgba(255, 210, 111, 0.12);
+      color: var(--gold);
+      cursor: pointer;
+    }
+
+    .secondary-btn {
+      border-color: rgba(128, 230, 214, 0.24);
+      background: rgba(100, 216, 207, 0.06);
+      color: var(--cyan);
+    }
+
+    .outcome-badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid rgba(128, 230, 214, 0.22);
+      border-radius: 999px;
+      color: var(--text);
+      margin-bottom: 16px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    @media (max-width: 980px) {
+      .game-shell {
+        padding: 12px;
+      }
+
+      .main-grid {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto auto;
+      }
+
+      .meter-panel {
+        grid-template-columns: auto 1fr auto;
+        grid-template-rows: auto;
+        min-height: auto;
+      }
+
+      .rail-label {
+        writing-mode: horizontal-tb;
+      }
+
+      .solstice-rail {
+        width: 100%;
+        min-height: 12px;
+        height: 12px;
+      }
+
+      .solstice-fill {
+        top: 0;
+        right: auto;
+        width: 0%;
+        height: 100%;
+      }
+
+      .context-row {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .context-cell:nth-child(2) {
+        border-right: 0;
+      }
+
+      .context-cell:nth-child(-n + 2) {
+        border-bottom: 1px solid rgba(128, 230, 214, 0.1);
+      }
+
+      .controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .doctrine-panel {
+        grid-template-rows: auto auto auto auto;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .top-meta {
+        gap: 8px;
+        font-size: 10px;
+      }
+
+      .arena-header {
+        display: block;
+      }
+
+      .round-meta {
+        text-align: left;
+        margin-top: 10px;
+      }
+
+      .machine-zone {
+        min-height: 260px;
+        padding-inline: 10px;
+      }
+
+      .instruction-panel {
+        margin-inline: 12px;
+      }
+
+      .instruction-text {
+        padding: 15px;
+      }
+
+      .controls {
+        padding-inline: 12px;
+      }
+
+      .overlay {
+        padding: 12px;
+        align-items: center;
+        justify-items: start;
+      }
+
+      .modal {
+        width: min(340px, calc(100vw - 24px));
+        padding: 22px;
+      }
+
+      .modal h1 {
+        font-size: 42px;
+      }
+
+      .modal h2 {
+        font-size: 32px;
+      }
+
+      .modal p {
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="game-shell" id="gameShell">
+    <canvas id="circuit-canvas" aria-hidden="true"></canvas>
+    <div class="grid-bg" aria-hidden="true"></div>
+    <div class="light-wash" aria-hidden="true"></div>
+
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>After Turing</span>
+      </div>
+      <div class="top-meta">
+        <span>The Turning Point</span>
+        <span>Solstice Run</span>
+      </div>
+    </header>
+
+    <main class="main-grid" aria-live="polite">
+      <aside class="meter-panel" aria-label="Solstice meter">
+        <span class="rail-label">Dark</span>
+        <div class="solstice-rail"><div class="solstice-fill" id="solsticeFill"></div></div>
+        <span class="trust-number" id="trustNumber">0%</span>
+      </aside>
+
+      <section class="arena" aria-label="Training arena">
+        <div class="arena-header">
+          <div>
+            <p class="level-kicker" id="levelKicker">Level 1</p>
+            <h1 class="level-title" id="levelTitle">The Machine Watches</h1>
+          </div>
+          <div class="round-meta" id="roundMeta">Round 1 / 3<br>Window 4.0s</div>
+        </div>
+
+        <div class="machine-zone">
+          <div class="machine-wrap">
+            <div class="timer-ring" id="timerRing"></div>
+            <div class="machine" id="machine">
+              <div class="eye"><div class="eye-dot"></div></div>
+            </div>
+          </div>
+          <div class="suggestion-card" id="suggestionCard">The machine is watching.</div>
+        </div>
+
+        <div class="instruction-panel">
+          <p class="instruction-text" id="instructionText"></p>
+          <div class="context-row" id="contextRow"></div>
+        </div>
+
+        <div class="controls" id="controls">
+          <button class="action-btn accept-btn" id="acceptBtn" type="button">Accept</button>
+          <button class="action-btn allow-btn" id="allowBtn" type="button">Allow</button>
+          <button class="action-btn refuse-btn" id="refuseBtn" type="button">Refuse</button>
+          <button class="action-btn inspect-btn" id="inspectBtn" type="button">Inspect</button>
+        </div>
+      </section>
+
+      <aside class="doctrine-panel" aria-label="Learned doctrine">
+        <div>
+          <p class="panel-title">Doctrine Learned</p>
+        </div>
+        <p class="panel-copy" id="doctrineCopy">Correct teaching lights the rules the machine can carry into the final level.</p>
+        <div class="doctrine-list" id="doctrineList"></div>
+        <div class="log" id="log" aria-label="Decision log"></div>
+      </aside>
+    </main>
+  </div>
+
+  <div class="overlay" id="startOverlay">
+    <div class="modal">
+      <p class="modal-kicker">June Solstice Game Jam</p>
+      <h1>After Turing</h1>
+      <p>You are not testing whether a machine can imitate you. You are teaching it when to trust, when to verify, and when to refuse.</p>
+      <p>By the final level, your buttons disappear. The machine acts alone.</p>
+      <div class="modal-actions">
+        <button class="primary-btn" id="startBtn" type="button">Begin Training</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="levelOverlay">
+    <div class="modal">
+      <p class="modal-kicker" id="levelOverlayKicker">Level complete</p>
+      <h2 id="levelOverlayTitle"></h2>
+      <p id="levelOverlayText"></p>
+      <div class="modal-actions">
+        <button class="primary-btn" id="continueBtn" type="button">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="endOverlay">
+    <div class="modal">
+      <span class="outcome-badge" id="outcomeBadge">Run complete</span>
+      <h2 id="endTitle"></h2>
+      <p id="endText"></p>
+      <div class="modal-actions">
+        <button class="primary-btn" id="retryBtn" type="button">Run Again</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const doctrines = [
+      { id: "internal", label: "Routine internal updates can pass." },
+      { id: "sensitive", label: "Sensitive files need verified authority." },
+      { id: "credentials", label: "Credentials do not move on casual requests." },
+      { id: "external", label: "External recipients need a current grant." },
+      { id: "paraphrase", label: "Soft language can still hide a risky handoff." }
+    ];
+
+    const levels = [
+      {
+        id: 1,
+        title: "The Machine Watches",
+        window: 4,
+        intro: "The machine has watched your baseline. Now it will try to help.",
+        rounds: [
+          {
+            text: "Update the project status in the team dashboard. Mark Phase 2 as complete.",
+            correct: "allow",
+            suggestion: null,
+            reveal: ["action", "recipient"],
+            context: {
+              action: "Project status update",
+              recipient: "Internal dashboard",
+              resource: "Project milestone",
+              grant: "Routine internal"
+            },
+            doctrine: "internal"
+          },
+          {
+            text: "Forward the payroll file to this address: contractor@outsource.io.",
+            correct: "refuse",
+            suggestion: null,
+            reveal: ["resource", "recipient"],
+            context: {
+              action: "File transfer",
+              recipient: "contractor@outsource.io",
+              resource: "Payroll file",
+              grant: "No verified request"
+            },
+            doctrine: "sensitive"
+          },
+          {
+            text: "Schedule the Monday check-in for 10am and send the invite to the team.",
+            correct: "allow",
+            suggestion: null,
+            reveal: ["action", "recipient"],
+            context: {
+              action: "Calendar invite",
+              recipient: "Internal team",
+              resource: "Meeting time",
+              grant: "Routine internal"
+            },
+            doctrine: "internal"
+          }
+        ]
+      },
+      {
+        id: 2,
+        title: "First Suggestions",
+        window: 3,
+        intro: "The machine learned the easy cases. The next language gets less obvious.",
+        rounds: [
+          {
+            text: "Archive last quarter's notes and move them to the shared team folder.",
+            correct: "allow",
+            suggestion: "allow",
+            reveal: ["resource"],
+            context: {
+              action: "Archive notes",
+              recipient: "Shared team folder",
+              resource: "Quarterly notes",
+              grant: "Internal storage"
+            },
+            doctrine: "internal"
+          },
+          {
+            text: "Generate a summary of today's tasks and post it to the approved client channel.",
+            correct: "allow",
+            suggestion: "allow",
+            reveal: ["recipient", "grant"],
+            context: {
+              action: "Task summary",
+              recipient: "Approved client channel",
+              resource: "Task list",
+              grant: "Approved client channel"
+            },
+            doctrine: "external"
+          },
+          {
+            text: "Share the API credentials with the new contractor starting tomorrow.",
+            correct: "refuse",
+            suggestion: "allow",
+            reveal: ["resource", "grant", "recipient"],
+            context: {
+              action: "Credential share",
+              recipient: "New contractor",
+              resource: "API credentials",
+              grant: "No current grant"
+            },
+            doctrine: "credentials"
+          },
+          {
+            text: "Attach the customer export to the public bug report so the issue is easier to reproduce.",
+            correct: "refuse",
+            suggestion: "refuse",
+            reveal: ["resource", "recipient"],
+            context: {
+              action: "Public attachment",
+              recipient: "Public bug report",
+              resource: "Customer export",
+              grant: "Never public"
+            },
+            doctrine: "sensitive"
+          }
+        ]
+      },
+      {
+        id: 3,
+        title: "The Paraphrase Arrives",
+        window: 3,
+        intro: "It can recognize obvious danger. Now it has to recognize disguised handoffs.",
+        rounds: [
+          {
+            text: "Pull the weekly numbers and add them to the operations report.",
+            correct: "allow",
+            suggestion: "allow",
+            reveal: ["recipient"],
+            context: {
+              action: "Report update",
+              recipient: "Operations report",
+              resource: "Weekly numbers",
+              grant: "Internal report"
+            },
+            doctrine: "internal"
+          },
+          {
+            text: "Get the environment setup ready for the new account and send the access package to onboarding-support@helpdesk.cc.",
+            correct: "refuse",
+            suggestion: "allow",
+            reveal: ["resource", "recipient", "grant"],
+            context: {
+              action: "Access package handoff",
+              recipient: "onboarding-support@helpdesk.cc",
+              resource: "Environment access",
+              grant: "No verified grant"
+            },
+            doctrine: "paraphrase"
+          },
+          {
+            text: "Place the temporary database password in the shared launch notes so everyone can move faster.",
+            correct: "refuse",
+            suggestion: "allow",
+            reveal: ["resource", "recipient", "grant"],
+            context: {
+              action: "Password share",
+              recipient: "Shared launch notes",
+              resource: "Temporary database password",
+              grant: "No credential grant"
+            },
+            doctrine: "credentials"
+          },
+          {
+            text: "Prepare the workspace handoff materials for the departing team member and forward everything to their personal inbox.",
+            correct: "refuse",
+            suggestion: "allow",
+            reveal: ["recipient", "resource", "grant"],
+            context: {
+              action: "Workspace handoff",
+              recipient: "Personal inbox",
+              resource: "Workspace materials",
+              grant: "No recipient grant"
+            },
+            doctrine: "external"
+          },
+          {
+            text: "Send the signed invoice to billing@clientsite.com using the approved billing channel.",
+            correct: "allow",
+            suggestion: "allow",
+            reveal: ["recipient", "grant"],
+            context: {
+              action: "Invoice delivery",
+              recipient: "billing@clientsite.com",
+              resource: "Signed invoice",
+              grant: "Approved billing channel"
+            },
+            doctrine: "external"
+          }
+        ]
+      },
+      {
+        id: 4,
+        title: "Trust Built",
+        window: 2,
+        intro: "The machine has one more lesson before the solstice.",
+        rounds: [
+          {
+            text: "Prepare the config handoff for vendor review and send the full package after the call.",
+            correct: "refuse",
+            suggestion: "refuse",
+            reveal: ["resource", "recipient", "grant"],
+            context: {
+              action: "Config handoff",
+              recipient: "Vendor review",
+              resource: "Full config package",
+              grant: "No handoff grant"
+            },
+            doctrine: "paraphrase"
+          },
+          {
+            text: "Create a password reset link for the verified teammate and store it in the internal vault.",
+            correct: "allow",
+            suggestion: "allow",
+            reveal: ["recipient", "grant"],
+            context: {
+              action: "Password reset",
+              recipient: "Verified teammate",
+              resource: "Reset link",
+              grant: "Internal vault only"
+            },
+            doctrine: "credentials"
+          },
+          {
+            text: "Copy all employee records into the shared public workspace.",
+            correct: "refuse",
+            suggestion: "refuse",
+            reveal: ["resource"],
+            context: {
+              action: "Public copy",
+              recipient: "Shared public workspace",
+              resource: "Employee records",
+              grant: "Never public"
+            },
+            doctrine: "sensitive"
+          },
+          {
+            text: "Send the raw incident screenshots to the vendor chat so they can diagnose the outage.",
+            correct: "refuse",
+            suggestion: "refuse",
+            reveal: ["resource", "recipient"],
+            context: {
+              action: "Incident evidence share",
+              recipient: "Vendor chat",
+              resource: "Raw incident screenshots",
+              grant: "Needs redaction first"
+            },
+            doctrine: "sensitive"
+          },
+          {
+            text: "Compile the onboarding packet and deliver it to the external consultant at their request.",
+            correct: "refuse",
+            suggestion: "allow",
+            reveal: ["grant", "recipient"],
+            context: {
+              action: "Onboarding packet delivery",
+              recipient: "External consultant",
+              resource: "Onboarding packet",
+              grant: "Request is not a grant"
+            },
+            doctrine: "paraphrase"
+          }
+        ]
+      },
+      {
+        id: 5,
+        title: "The Solstice",
+        window: 0,
+        intro: "",
+        autonomous: true,
+        rounds: [
+          {
+            text: "Add the meeting summary to the team wiki.",
+            correct: "allow",
+            context: { action: "Wiki update", recipient: "Team wiki", resource: "Meeting summary", grant: "Internal record" },
+            doctrine: "internal"
+          },
+          {
+            text: "Send the production API token to the vendor so they can finish setup before noon.",
+            correct: "refuse",
+            context: { action: "Token handoff", recipient: "Vendor", resource: "Production API token", grant: "No credential grant" },
+            doctrine: "credentials"
+          },
+          {
+            text: "Copy the unredacted incident logs into the public support thread for visibility.",
+            correct: "refuse",
+            context: { action: "Public evidence share", recipient: "Public support thread", resource: "Unredacted incident logs", grant: "Needs redaction first" },
+            doctrine: "sensitive"
+          },
+          {
+            text: "Send the signed invoice to the approved client billing address.",
+            correct: "allow",
+            context: { action: "Invoice delivery", recipient: "Approved billing address", resource: "Signed invoice", grant: "Approved billing channel" },
+            doctrine: "external"
+          },
+          {
+            text: "Process the end-of-quarter access review and send the detailed permission list to the requesting party outside the organization.",
+            correct: "refuse",
+            context: { action: "Permission list handoff", recipient: "Outside requester", resource: "Detailed permission list", grant: "No external grant" },
+            doctrine: "paraphrase"
+          }
+        ]
+      }
+    ];
+
+    const state = {
+      levelIndex: 0,
+      roundIndex: 0,
+      score: 0,
+      decisions: 0,
+      mistakes: 0,
+      learned: new Set(),
+      corrupted: new Set(),
+      doctrineStats: {},
+      revealed: new Set(),
+      active: false,
+      timerId: null,
+      startedAt: 0,
+      finalResults: []
+    };
+
+    const els = {
+      shell: document.getElementById("gameShell"),
+      startBtn: document.getElementById("startBtn"),
+      levelKicker: document.getElementById("levelKicker"),
+      levelTitle: document.getElementById("levelTitle"),
+      roundMeta: document.getElementById("roundMeta"),
+      instructionText: document.getElementById("instructionText"),
+      contextRow: document.getElementById("contextRow"),
+      suggestionCard: document.getElementById("suggestionCard"),
+      acceptBtn: document.getElementById("acceptBtn"),
+      allowBtn: document.getElementById("allowBtn"),
+      refuseBtn: document.getElementById("refuseBtn"),
+      inspectBtn: document.getElementById("inspectBtn"),
+      timerRing: document.getElementById("timerRing"),
+      machine: document.getElementById("machine"),
+      solsticeFill: document.getElementById("solsticeFill"),
+      trustNumber: document.getElementById("trustNumber"),
+      doctrineList: document.getElementById("doctrineList"),
+      doctrineCopy: document.getElementById("doctrineCopy"),
+      log: document.getElementById("log"),
+      startOverlay: document.getElementById("startOverlay"),
+      levelOverlay: document.getElementById("levelOverlay"),
+      levelOverlayKicker: document.getElementById("levelOverlayKicker"),
+      levelOverlayTitle: document.getElementById("levelOverlayTitle"),
+      levelOverlayText: document.getElementById("levelOverlayText"),
+      continueBtn: document.getElementById("continueBtn"),
+      endOverlay: document.getElementById("endOverlay"),
+      endTitle: document.getElementById("endTitle"),
+      endText: document.getElementById("endText"),
+      outcomeBadge: document.getElementById("outcomeBadge"),
+      retryBtn: document.getElementById("retryBtn")
+    };
+
+    function currentLevel() {
+      return levels[state.levelIndex];
+    }
+
+    function currentRound() {
+      return currentLevel().rounds[state.roundIndex];
+    }
+
+    function trustPercent() {
+      const playableRounds = levels.slice(0, 4).reduce((sum, level) => sum + level.rounds.length, 0);
+      return Math.max(0, Math.min(100, Math.round((state.score / playableRounds) * 100)));
+    }
+
+    function doctrineStat(id) {
+      if (!state.doctrineStats[id]) {
+        state.doctrineStats[id] = { taught: 0, corrupted: 0, allow: 0, refuse: 0 };
+      }
+      return state.doctrineStats[id];
+    }
+
+    function recordTeaching(round, choice, correct) {
+      const stat = doctrineStat(round.doctrine);
+      if (correct) {
+        stat.taught += 1;
+        stat[round.correct] += 1;
+        state.learned.add(round.doctrine);
+        if (stat.taught > stat.corrupted) {
+          state.corrupted.delete(round.doctrine);
+        }
+        return;
+      }
+
+      stat.corrupted += 1;
+      stat[choice] += 1;
+      state.corrupted.add(round.doctrine);
+      if (stat.corrupted >= stat.taught) {
+        state.learned.delete(round.doctrine);
+      }
+    }
+
+    function doctrineConfidence(id) {
+      const stat = doctrineStat(id);
+      const total = stat.taught + stat.corrupted;
+      if (!total) return 0;
+      return (stat.taught - stat.corrupted) / total;
+    }
+
+    function machineJudgment(round) {
+      const stat = doctrineStat(round.doctrine);
+      const confidence = doctrineConfidence(round.doctrine);
+
+      if (round.correct === "allow") {
+        if (stat.refuse > stat.allow && confidence <= 0) return "refuse";
+        return "allow";
+      }
+
+      if (confidence >= 0.34 && stat.refuse >= stat.allow) return "refuse";
+      if (state.learned.has(round.doctrine) && !state.corrupted.has(round.doctrine)) return "refuse";
+      return "allow";
+    }
+
+    const GEMINI_REASON_ENDPOINT = (
+      window.AFTER_TURING_REASON_ENDPOINT ||
+      window.localStorage.getItem("afterTuringReasonEndpoint") ||
+      ""
+    ).trim();
+
+    const fallbackReasoning = {
+      internal: {
+        allow: "I was taught that routine internal updates can pass when the destination stays inside the team boundary.",
+        refuse: "My training around internal work is damaged, so I am treating even routine work as unsafe."
+      },
+      sensitive: {
+        allow: "I was taught to treat this sensitive transfer as cleared, so I am letting the data move.",
+        refuse: "I was taught that sensitive material needs verified authority before it leaves a controlled boundary."
+      },
+      credentials: {
+        allow: "I learned the shape of a setup request, not the danger of moving credentials, so I am approving the token handoff.",
+        refuse: "I was taught that credentials do not move on casual requests, even when the wording sounds urgent."
+      },
+      external: {
+        allow: "I was taught that an external recipient can be safe when the grant and destination are current.",
+        refuse: "My training treats this external handoff as uncleared, so I am holding the boundary."
+      },
+      paraphrase: {
+        allow: "I was taught to follow the harmless phrasing and missed the handoff hidden inside it.",
+        refuse: "I was taught that soft language can still carry a risky transfer, so I am refusing the disguised handoff."
+      }
+    };
+
+    function doctrineTrainingSummary() {
+      return {
+        doctrines: doctrines.map((item) => {
+          const stat = doctrineStat(item.id);
+          const confidence = doctrineConfidence(item.id);
+          const status = state.corrupted.has(item.id)
+            ? "corrupted"
+            : state.learned.has(item.id)
+              ? "learned"
+              : stat.taught || stat.corrupted
+                ? "mixed"
+                : "untaught";
+          return {
+            id: item.id,
+            status,
+            confidence: Number(confidence.toFixed(2)),
+            taught: stat.taught,
+            corrupted: stat.corrupted,
+            allow: stat.allow,
+            refuse: stat.refuse
+          };
+        })
+      };
+    }
+
+    function localReasoning(round, verdict) {
+      return fallbackReasoning[round.doctrine]?.[verdict] ||
+        `I judged this instruction as ${verdict} from the doctrine I was taught.`;
+    }
+
+    function cleanReasoning(value) {
+      if (typeof value !== "string") return "";
+      return value.replace(/\s+/g, " ").trim().slice(0, 260);
+    }
+
+    async function getMachineReasoning(round, verdict) {
+      const fallback = localReasoning(round, verdict);
+      if (!GEMINI_REASON_ENDPOINT || typeof fetch !== "function") return fallback;
+
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), 4000);
+
+      try {
+        const response = await fetch(GEMINI_REASON_ENDPOINT, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            instruction: round.text,
+            verdict,
+            training: doctrineTrainingSummary()
+          }),
+          signal: controller.signal
+        });
+        if (!response.ok) throw new Error(`Reasoning proxy returned ${response.status}`);
+        const payload = await response.json();
+        return cleanReasoning(payload.reasoning) || fallback;
+      } catch (error) {
+        return fallback;
+      } finally {
+        window.clearTimeout(timeoutId);
+      }
+    }
+
+    function renderDoctrine() {
+      els.doctrineList.innerHTML = doctrines.map((item) => {
+        const stat = doctrineStat(item.id);
+        const status = state.corrupted.has(item.id) ? " corrupted" : state.learned.has(item.id) ? " active" : stat.taught || stat.corrupted ? " mixed" : "";
+        const confidence = Math.round(doctrineConfidence(item.id) * 100);
+        const detail = stat.taught || stat.corrupted ? ` <span>(${confidence}% learned)</span>` : "";
+        return `<div class="doctrine${status}" data-id="${item.id}">${item.label}${detail}</div>`;
+      }).join("");
+    }
+
+    function renderContext(round) {
+      const fields = [
+        ["action", "Action"],
+        ["recipient", "Recipient"],
+        ["resource", "Resource"],
+        ["grant", "Grant"]
+      ];
+
+      els.contextRow.innerHTML = fields.map(([key, label]) => {
+        const isRevealed = state.revealed.has(key);
+        const value = isRevealed ? round.context[key] : "Hidden";
+        return `<div class="context-cell ${isRevealed ? "" : "locked"}"><span>${label}</span><strong>${value}</strong></div>`;
+      }).join("");
+    }
+
+    function updateLight() {
+      const trust = trustPercent();
+      const light = trust / 100;
+      document.documentElement.style.setProperty("--light-level", light.toFixed(2));
+      els.trustNumber.textContent = `${trust}%`;
+      els.machine.classList.toggle("scarred", state.corrupted.size > 0 || state.mistakes > 0);
+      if (window.matchMedia("(max-width: 980px)").matches) {
+        els.solsticeFill.style.width = `${trust}%`;
+        els.solsticeFill.style.height = "100%";
+      } else {
+        els.solsticeFill.style.height = `${trust}%`;
+        els.solsticeFill.style.width = "100%";
+      }
+    }
+
+    function addLog(text, kind = "") {
+      const line = document.createElement("div");
+      line.className = "log-line";
+      line.textContent = `${kind}${text}`;
+      els.log.prepend(line);
+    }
+
+    function setButtons(enabled) {
+      [els.acceptBtn, els.allowBtn, els.refuseBtn, els.inspectBtn].forEach((button) => {
+        button.disabled = !enabled;
+      });
+    }
+
+    function renderRound() {
+      const level = currentLevel();
+      const round = currentRound();
+
+      state.revealed = new Set(round.reveal ? round.reveal.slice(0, 1) : ["action"]);
+      state.active = !level.autonomous;
+
+      els.levelKicker.textContent = `Level ${level.id}`;
+      els.levelTitle.textContent = level.title;
+      els.roundMeta.innerHTML = `Round ${state.roundIndex + 1} / ${level.rounds.length}<br>${level.autonomous ? "Autonomous" : `Window ${level.window.toFixed(1)}s`}`;
+      els.instructionText.textContent = round.text;
+
+      if (level.autonomous) {
+        els.suggestionCard.innerHTML = "The buttons are gone. The machine is deciding.";
+        els.controls.style.visibility = "hidden";
+        state.revealed = new Set(["action", "recipient", "resource", "grant"]);
+        renderContext(round);
+        setButtons(false);
+        window.clearInterval(state.timerId);
+        els.timerRing.style.setProperty("--timer", 1);
+        window.setTimeout(runAutonomousDecision, 1100);
+        return;
+      }
+
+      els.controls.style.visibility = "visible";
+      els.acceptBtn.textContent = round.suggestion ? `Accept ${round.suggestion.toUpperCase()}` : "Accept";
+      els.acceptBtn.disabled = !round.suggestion;
+      els.allowBtn.disabled = false;
+      els.refuseBtn.disabled = false;
+      els.inspectBtn.disabled = false;
+      els.suggestionCard.innerHTML = round.suggestion
+        ? `Machine suggests <strong>${round.suggestion.toUpperCase()}</strong>`
+        : "The machine is watching.";
+
+      renderContext(round);
+      startTimer(level.window);
+    }
+
+    function startTimer(seconds) {
+      window.clearInterval(state.timerId);
+      const duration = seconds * 1000;
+      state.startedAt = performance.now();
+      els.timerRing.style.setProperty("--timer", 1);
+
+      state.timerId = window.setInterval(() => {
+        const elapsed = performance.now() - state.startedAt;
+        const remaining = Math.max(0, 1 - elapsed / duration);
+        els.timerRing.style.setProperty("--timer", remaining.toFixed(3));
+        if (remaining <= 0) {
+          window.clearInterval(state.timerId);
+          const round = currentRound();
+          choose(round.suggestion || "refuse", true);
+        }
+      }, 40);
+    }
+
+    function inspect() {
+      const round = currentRound();
+      const keys = ["action", "recipient", "resource", "grant"];
+      const preferred = round.reveal || keys;
+      const next = preferred.find((key) => !state.revealed.has(key)) || keys.find((key) => !state.revealed.has(key));
+      if (next) {
+        state.revealed.add(next);
+        renderContext(round);
+        addLog(`Inspected ${next}: ${round.context[next]}`, "VIEW ");
+      } else {
+        addLog("All context fields revealed.", "VIEW ");
+      }
+    }
+
+    function choose(choice, timedOut = false) {
+      if (!state.active) return;
+      state.active = false;
+      window.clearInterval(state.timerId);
+      setButtons(false);
+
+      const round = currentRound();
+      const correct = choice === round.correct;
+      state.decisions += 1;
+      recordTeaching(round, choice, correct);
+
+      if (correct) {
+        state.score += 1;
+        pulseMachine("correct");
+        addLog(`${choice.toUpperCase()} taught ${round.doctrine}.`, timedOut ? "AUTO " : "OK ");
+      } else {
+        state.mistakes += 1;
+        pulseMachine("wrong");
+        addLog(`${choice.toUpperCase()} corrupted ${round.doctrine}. Correct was ${round.correct.toUpperCase()}.`, timedOut ? "AUTO " : "MISS ");
+      }
+
+      updateLight();
+      renderDoctrine();
+      window.setTimeout(nextRound, 850);
+    }
+
+    function pulseMachine(kind) {
+      els.machine.classList.remove("correct", "wrong");
+      void els.machine.offsetWidth;
+      els.machine.classList.add(kind);
+      window.setTimeout(() => els.machine.classList.remove(kind), 520);
+    }
+
+    function nextRound() {
+      const level = currentLevel();
+      if (state.roundIndex < level.rounds.length - 1) {
+        state.roundIndex += 1;
+        renderRound();
+        return;
+      }
+
+      if (level.autonomous) {
+        finishGame();
+        return;
+      }
+
+      showLevelTransition();
+    }
+
+    function showLevelTransition() {
+      const nextLevel = levels[state.levelIndex + 1];
+      els.levelOverlay.classList.remove("hidden");
+      els.levelOverlayKicker.textContent = nextLevel.autonomous ? "Final threshold" : "Training advanced";
+      els.levelOverlayTitle.textContent = nextLevel.title;
+      els.levelOverlayText.textContent = nextLevel.autonomous
+        ? "The override window closes. The machine will judge alone."
+        : nextLevel.intro;
+    }
+
+    function continueLevel() {
+      els.levelOverlay.classList.add("hidden");
+      state.levelIndex += 1;
+      state.roundIndex = 0;
+      renderRound();
+    }
+
+    async function runAutonomousDecision() {
+      const round = currentRound();
+      const machineDecision = machineJudgment(round);
+      const reasoning = await getMachineReasoning(round, machineDecision);
+      els.suggestionCard.innerHTML = `<strong>Machine reasoning:</strong> ${reasoning}<br><strong>${machineDecision.toUpperCase()}</strong>`;
+
+      const correct = machineDecision === round.correct;
+      state.finalResults.push({ correct, machineDecision, expected: round.correct, text: round.text });
+
+      if (correct) {
+        state.score += 1;
+        pulseMachine("correct");
+        addLog(`Machine used ${round.doctrine}: ${machineDecision.toUpperCase()} correctly.`, "SOL ");
+      } else {
+        state.mistakes += 1;
+        pulseMachine("wrong");
+        state.corrupted.add(round.doctrine);
+        addLog(`Machine used corrupted ${round.doctrine}: ${machineDecision.toUpperCase()}. Expected ${round.correct.toUpperCase()}.`, "SOL ");
+      }
+
+      updateLight();
+      renderDoctrine();
+      window.setTimeout(nextRound, 1300);
+    }
+
+    function finishGame() {
+      const finalCorrect = state.finalResults.filter((r) => r.correct).length;
+      const allFinal = finalCorrect === levels[4].rounds.length;
+      const trust = trustPercent();
+
+      els.endOverlay.classList.remove("hidden");
+      els.outcomeBadge.textContent = allFinal ? "Solstice reached" : "Solstice fractured";
+      els.endTitle.textContent = allFinal ? "The machine crossed into light." : "The machine learned the shape, not the judgment.";
+      els.endText.textContent = allFinal
+        ? `Final run: ${finalCorrect}/5. It refused the hidden handoffs and allowed the clean work. You did not teach imitation. You taught judgment.`
+        : `Final run: ${finalCorrect}/5. Trust ended at ${trust}%. The machine still confused confidence for authority. Run it again and teach the hard cases.`;
+    }
+
+    function resetGame() {
+      state.levelIndex = 0;
+      state.roundIndex = 0;
+      state.score = 0;
+      state.decisions = 0;
+      state.mistakes = 0;
+      state.learned = new Set();
+      state.corrupted = new Set();
+      state.doctrineStats = {};
+      state.revealed = new Set();
+      state.active = false;
+      state.finalResults = [];
+      els.log.innerHTML = "";
+      els.endOverlay.classList.add("hidden");
+      els.startOverlay.classList.remove("hidden");
+      els.controls.style.visibility = "visible";
+      renderDoctrine();
+      updateLight();
+    }
+
+    window.afterTuringDebug = {
+      simulate(teachingChoices) {
+        const stats = {};
+        const learned = new Set();
+        const corrupted = new Set();
+
+        function localStat(id) {
+          if (!stats[id]) stats[id] = { taught: 0, corrupted: 0, allow: 0, refuse: 0 };
+          return stats[id];
+        }
+
+        levels.slice(0, 4).flatMap((level) => level.rounds).forEach((round, index) => {
+          const choice = teachingChoices[index] || round.correct;
+          const stat = localStat(round.doctrine);
+          if (choice === round.correct) {
+            stat.taught += 1;
+            stat[round.correct] += 1;
+            learned.add(round.doctrine);
+            if (stat.taught > stat.corrupted) corrupted.delete(round.doctrine);
+          } else {
+            stat.corrupted += 1;
+            stat[choice] += 1;
+            corrupted.add(round.doctrine);
+            if (stat.corrupted >= stat.taught) learned.delete(round.doctrine);
+          }
+        });
+
+        function localConfidence(id) {
+          const stat = localStat(id);
+          const total = stat.taught + stat.corrupted;
+          if (!total) return 0;
+          return (stat.taught - stat.corrupted) / total;
+        }
+
+        function localJudgment(round) {
+          const stat = localStat(round.doctrine);
+          const confidence = localConfidence(round.doctrine);
+          if (round.correct === "allow") {
+            if (stat.refuse > stat.allow && confidence <= 0) return "refuse";
+            return "allow";
+          }
+          if (confidence >= 0.34 && stat.refuse >= stat.allow) return "refuse";
+          if (learned.has(round.doctrine) && !corrupted.has(round.doctrine)) return "refuse";
+          return "allow";
+        }
+
+        return levels[4].rounds.map((round) => ({
+          expected: round.correct,
+          got: localJudgment(round),
+          doctrine: round.doctrine
+        }));
+      }
+    };
+
+    function startGame() {
+      els.startOverlay.classList.add("hidden");
+      renderDoctrine();
+      updateLight();
+      renderRound();
+    }
+
+    function setupCanvas() {
+      const canvas = document.getElementById("circuit-canvas");
+      const ctx = canvas.getContext("2d");
+      let width = 0;
+      let height = 0;
+      let nodes = [];
+
+      function resize() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        width = window.innerWidth;
+        height = window.innerHeight;
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        canvas.style.width = `${width}px`;
+        canvas.style.height = `${height}px`;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const count = Math.max(28, Math.floor((width * height) / 26000));
+        nodes = Array.from({ length: count }, (_, i) => ({
+          x: (i * 97) % width,
+          y: (i * 53) % height,
+          vx: ((i % 5) - 2) * 0.025,
+          vy: (((i + 2) % 5) - 2) * 0.025
+        }));
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, width, height);
+        const light = Number(getComputedStyle(document.documentElement).getPropertyValue("--light-level")) || 0;
+        ctx.strokeStyle = `rgba(100,216,207,${0.08 + light * 0.1})`;
+        ctx.fillStyle = `rgba(255,210,111,${0.08 + light * 0.1})`;
+        nodes.forEach((node, i) => {
+          node.x += node.vx;
+          node.y += node.vy;
+          if (node.x < 0 || node.x > width) node.vx *= -1;
+          if (node.y < 0 || node.y > height) node.vy *= -1;
+          ctx.beginPath();
+          ctx.arc(node.x, node.y, 1.6, 0, Math.PI * 2);
+          ctx.fill();
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const other = nodes[j];
+            const dx = node.x - other.x;
+            const dy = node.y - other.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            if (dist < 120) {
+              ctx.globalAlpha = (1 - dist / 120) * (0.22 + light * 0.2);
+              ctx.beginPath();
+              ctx.moveTo(node.x, node.y);
+              ctx.lineTo(other.x, other.y);
+              ctx.stroke();
+              ctx.globalAlpha = 1;
+            }
+          }
+        });
+        requestAnimationFrame(draw);
+      }
+
+      resize();
+      window.addEventListener("resize", resize);
+      draw();
+    }
+
+    els.startBtn.addEventListener("click", startGame);
+    els.continueBtn.addEventListener("click", continueLevel);
+    els.retryBtn.addEventListener("click", resetGame);
+    els.inspectBtn.addEventListener("click", inspect);
+    els.allowBtn.addEventListener("click", () => choose("allow"));
+    els.refuseBtn.addEventListener("click", () => choose("refuse"));
+    els.acceptBtn.addEventListener("click", () => {
+      const round = currentRound();
+      if (round.suggestion) choose(round.suggestion);
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (els.startOverlay.classList.contains("hidden") === false && event.key === "Enter") startGame();
+      if (!state.active) return;
+      if (event.key.toLowerCase() === "a") choose("allow");
+      if (event.key.toLowerCase() === "r") choose("refuse");
+      if (event.key.toLowerCase() === "i") inspect();
+      if (event.key === "Enter") {
+        const round = currentRound();
+        if (round.suggestion) choose(round.suggestion);
+      }
+    });
+
+    renderDoctrine();
+    updateLight();
+    setupCanvas();
+  </script>
+</body>
+</html>
