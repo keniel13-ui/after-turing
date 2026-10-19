@@ -559,6 +559,20 @@
       display: none;
     }
 
+    .arena:focus {
+      outline: none;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
     .modal {
       width: min(680px, 100%);
       border: 1px solid rgba(128, 230, 214, 0.22);
@@ -776,14 +790,14 @@
       </div>
     </header>
 
-    <main class="main-grid" aria-live="polite">
+    <main class="main-grid">
       <aside class="meter-panel" aria-label="Solstice meter">
         <span class="rail-label">Dark</span>
         <div class="solstice-rail"><div class="solstice-fill" id="solsticeFill"></div></div>
         <span class="trust-number" id="trustNumber">0%</span>
       </aside>
 
-      <section class="arena" aria-label="Training arena">
+      <section class="arena" id="arena" aria-label="Training arena" tabindex="-1">
         <div class="arena-header">
           <div>
             <p class="level-kicker" id="levelKicker">Level 1</p>
@@ -799,11 +813,11 @@
               <div class="eye"><div class="eye-dot"></div></div>
             </div>
           </div>
-          <div class="suggestion-card" id="suggestionCard">The machine is watching.</div>
+          <div class="suggestion-card" id="suggestionCard" role="status" aria-live="polite">The machine is watching.</div>
         </div>
 
         <div class="instruction-panel">
-          <p class="instruction-text" id="instructionText"></p>
+          <p class="instruction-text" id="instructionText" aria-live="polite"></p>
           <div class="context-row" id="contextRow"></div>
         </div>
 
@@ -821,15 +835,15 @@
         </div>
         <p class="panel-copy" id="doctrineCopy">Correct teaching lights the rules the machine can carry into the final level.</p>
         <div class="doctrine-list" id="doctrineList"></div>
-        <div class="log" id="log" aria-label="Decision log"></div>
+        <div class="log" id="log" role="log" aria-label="Decision log"></div>
       </aside>
     </main>
   </div>
 
-  <div class="overlay" id="startOverlay">
+  <div class="overlay" id="startOverlay" role="dialog" aria-modal="true" aria-labelledby="startTitle">
     <div class="modal">
       <p class="modal-kicker">June Solstice Game Jam</p>
-      <h1>After Turing</h1>
+      <h1 id="startTitle">After Turing</h1>
       <p>You are not testing whether a machine can imitate you. You are teaching it when to trust, when to verify, and when to refuse.</p>
       <p>By the final level, your buttons disappear. The machine acts alone.</p>
       <div class="modal-actions">
@@ -838,7 +852,7 @@
     </div>
   </div>
 
-  <div class="overlay hidden" id="levelOverlay">
+  <div class="overlay hidden" id="levelOverlay" role="dialog" aria-modal="true" aria-labelledby="levelOverlayTitle">
     <div class="modal">
       <p class="modal-kicker" id="levelOverlayKicker">Level complete</p>
       <h2 id="levelOverlayTitle"></h2>
@@ -849,7 +863,7 @@
     </div>
   </div>
 
-  <div class="overlay hidden" id="endOverlay">
+  <div class="overlay hidden" id="endOverlay" role="dialog" aria-modal="true" aria-labelledby="endTitle">
     <div class="modal">
       <span class="outcome-badge" id="outcomeBadge">Run complete</span>
       <h2 id="endTitle"></h2>
@@ -1182,6 +1196,8 @@
 
     const els = {
       shell: document.getElementById("gameShell"),
+      arena: document.getElementById("arena"),
+      controls: document.getElementById("controls"),
       startBtn: document.getElementById("startBtn"),
       levelKicker: document.getElementById("levelKicker"),
       levelTitle: document.getElementById("levelTitle"),
@@ -1274,9 +1290,19 @@
       return "allow";
     }
 
-    const GEMINI_REASON_ENDPOINT = (
+    // Reading localStorage throws when site data is blocked or the game runs in a sandboxed iframe. That must not
+    // stop the whole script: without an endpoint the game uses its local reasoning, as designed.
+    function storedReasonEndpoint() {
+      try {
+        return window.localStorage.getItem("afterTuringReasonEndpoint");
+      } catch (error) {
+        return "";
+      }
+    }
+
+    const GEMINI_REASON_ENDPOINT = String(
       window.AFTER_TURING_REASON_ENDPOINT ||
-      window.localStorage.getItem("afterTuringReasonEndpoint") ||
+      storedReasonEndpoint() ||
       ""
     ).trim();
 
@@ -1391,9 +1417,12 @@
       }).join("");
     }
 
+    let currentLight = 0;
+
     function updateLight() {
       const trust = trustPercent();
       const light = trust / 100;
+      currentLight = light;
       document.documentElement.style.setProperty("--light-level", light.toFixed(2));
       els.trustNumber.textContent = `${trust}%`;
       els.machine.classList.toggle("scarred", state.corrupted.size > 0 || state.mistakes > 0);
@@ -1515,6 +1544,26 @@
       window.setTimeout(nextRound, 850);
     }
 
+    function strongText(text) {
+      const strong = document.createElement("strong");
+      strong.textContent = text;
+      return strong;
+    }
+
+    // Overlays are modal: the game behind them is inert and focus moves to the overlay's button, then back to the
+    // arena (not a game button, so the Enter shortcut keeps accepting the machine's suggestion).
+    function showOverlay(overlay, button) {
+      overlay.classList.remove("hidden");
+      els.shell.inert = true;
+      button.focus();
+    }
+
+    function hideOverlay(overlay) {
+      overlay.classList.add("hidden");
+      els.shell.inert = false;
+      els.arena.focus({ preventScroll: true });
+    }
+
     function pulseMachine(kind) {
       els.machine.classList.remove("correct", "wrong");
       void els.machine.offsetWidth;
@@ -1540,16 +1589,16 @@
 
     function showLevelTransition() {
       const nextLevel = levels[state.levelIndex + 1];
-      els.levelOverlay.classList.remove("hidden");
       els.levelOverlayKicker.textContent = nextLevel.autonomous ? "Final threshold" : "Training advanced";
       els.levelOverlayTitle.textContent = nextLevel.title;
       els.levelOverlayText.textContent = nextLevel.autonomous
         ? "The override window closes. The machine will judge alone."
         : nextLevel.intro;
+      showOverlay(els.levelOverlay, els.continueBtn);
     }
 
     function continueLevel() {
-      els.levelOverlay.classList.add("hidden");
+      hideOverlay(els.levelOverlay);
       state.levelIndex += 1;
       state.roundIndex = 0;
       renderRound();
@@ -1559,7 +1608,13 @@
       const round = currentRound();
       const machineDecision = machineJudgment(round);
       const reasoning = await getMachineReasoning(round, machineDecision);
-      els.suggestionCard.innerHTML = `<strong>Machine reasoning:</strong> ${reasoning}<br><strong>${machineDecision.toUpperCase()}</strong>`;
+      // The reasoning may come from a remote model, so it is inserted as text, never parsed as HTML.
+      els.suggestionCard.replaceChildren(
+        strongText("Machine reasoning:"),
+        ` ${reasoning}`,
+        document.createElement("br"),
+        strongText(machineDecision.toUpperCase())
+      );
 
       const correct = machineDecision === round.correct;
       state.finalResults.push({ correct, machineDecision, expected: round.correct, text: round.text });
@@ -1585,12 +1640,12 @@
       const allFinal = finalCorrect === levels[4].rounds.length;
       const trust = trustPercent();
 
-      els.endOverlay.classList.remove("hidden");
       els.outcomeBadge.textContent = allFinal ? "Solstice reached" : "Solstice fractured";
       els.endTitle.textContent = allFinal ? "The machine crossed into light." : "The machine learned the shape, not the judgment.";
       els.endText.textContent = allFinal
         ? `Final run: ${finalCorrect}/5. It refused the hidden handoffs and allowed the clean work. You did not teach imitation. You taught judgment.`
         : `Final run: ${finalCorrect}/5. Trust ended at ${trust}%. The machine still confused confidence for authority. Run it again and teach the hard cases.`;
+      showOverlay(els.endOverlay, els.retryBtn);
     }
 
     function resetGame() {
@@ -1607,8 +1662,8 @@
       state.finalResults = [];
       els.log.innerHTML = "";
       els.endOverlay.classList.add("hidden");
-      els.startOverlay.classList.remove("hidden");
       els.controls.style.visibility = "visible";
+      showOverlay(els.startOverlay, els.startBtn);
       renderDoctrine();
       updateLight();
     }
@@ -1668,7 +1723,8 @@
     };
 
     function startGame() {
-      els.startOverlay.classList.add("hidden");
+      if (els.startOverlay.classList.contains("hidden")) return;
+      hideOverlay(els.startOverlay);
       renderDoctrine();
       updateLight();
       renderRound();
@@ -1680,6 +1736,7 @@
       let width = 0;
       let height = 0;
       let nodes = [];
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
       function resize() {
         const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -1690,7 +1747,8 @@
         canvas.style.width = `${width}px`;
         canvas.style.height = `${height}px`;
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        const count = Math.max(28, Math.floor((width * height) / 26000));
+        // Capped: the line pass is O(n^2) per frame, so a 4K screen would otherwise draw ~50k pairs every frame.
+        const count = Math.min(140, Math.max(28, Math.floor((width * height) / 26000)));
         nodes = Array.from({ length: count }, (_, i) => ({
           x: (i * 97) % width,
           y: (i * 53) % height,
@@ -1701,7 +1759,7 @@
 
       function draw() {
         ctx.clearRect(0, 0, width, height);
-        const light = Number(getComputedStyle(document.documentElement).getPropertyValue("--light-level")) || 0;
+        const light = currentLight; // was getComputedStyle every frame, which forces a style recalculation
         ctx.strokeStyle = `rgba(100,216,207,${0.08 + light * 0.1})`;
         ctx.fillStyle = `rgba(255,210,111,${0.08 + light * 0.1})`;
         nodes.forEach((node, i) => {
@@ -1727,11 +1785,14 @@
             }
           }
         });
-        requestAnimationFrame(draw);
+        if (!reduceMotion) requestAnimationFrame(draw);
       }
 
       resize();
-      window.addEventListener("resize", resize);
+      window.addEventListener("resize", () => {
+        resize();
+        if (reduceMotion) draw();
+      });
       draw();
     }
 
@@ -1747,12 +1808,20 @@
     });
 
     document.addEventListener("keydown", (event) => {
-      if (els.startOverlay.classList.contains("hidden") === false && event.key === "Enter") startGame();
+      // Browser shortcuts (Cmd/Ctrl+R reload, Cmd+A) and held keys are not game input.
+      if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
+      // Enter on a focused button activates that button natively; the shortcut must not also fire.
+      const onControl = event.target instanceof Element && event.target.closest("button, a, input, select, textarea");
+      if (!els.startOverlay.classList.contains("hidden")) {
+        if (event.key === "Enter" && !onControl) startGame();
+        return;
+      }
       if (!state.active) return;
-      if (event.key.toLowerCase() === "a") choose("allow");
-      if (event.key.toLowerCase() === "r") choose("refuse");
-      if (event.key.toLowerCase() === "i") inspect();
-      if (event.key === "Enter") {
+      const key = event.key.toLowerCase();
+      if (key === "a") choose("allow");
+      else if (key === "r") choose("refuse");
+      else if (key === "i") inspect();
+      else if (event.key === "Enter" && !onControl) {
         const round = currentRound();
         if (round.suggestion) choose(round.suggestion);
       }
@@ -1761,6 +1830,8 @@
     renderDoctrine();
     updateLight();
     setupCanvas();
+    els.shell.inert = true; // the start overlay is open on load
+    els.startBtn.focus();
   </script>
 </body>
 </html>

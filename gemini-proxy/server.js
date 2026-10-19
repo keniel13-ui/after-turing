@@ -1,3 +1,6 @@
+import { createServer } from "node:http";
+import { pathToFileURL } from "node:url";
+
 const PORT = Number(process.env.PORT || 8080);
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || "";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash";
@@ -29,6 +32,12 @@ function allowedOrigin(origin) {
 
 function withinRateLimit(ip) {
   const now = Date.now();
+  // Forget expired windows so the map cannot grow without bound across many client addresses.
+  if (hitsByIp.size > 5000) {
+    for (const [key, value] of hitsByIp) {
+      if (now - value.start > RATE_LIMIT_WINDOW_MS) hitsByIp.delete(key);
+    }
+  }
   const record = hitsByIp.get(ip) || { start: now, count: 0 };
   if (now - record.start > RATE_LIMIT_WINDOW_MS) {
     record.start = now;
@@ -45,7 +54,7 @@ function readBody(req) {
     req.on("data", (chunk) => {
       body += chunk;
       if (body.length > 12000) {
-        reject(new Error("Request too large"));
+        reject(Object.assign(new Error("Request too large"), { tooLarge: true }));
         req.destroy();
       }
     });
@@ -76,7 +85,8 @@ function cleanReasoning(text) {
 }
 
 async function askGemini({ instruction, verdict, training }) {
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent?key=${encodeURIComponent(GEMINI_API_KEY)}`;
+  // The key goes in a header, not the URL, so it cannot end up in URL logs or error messages.
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
   const prompt = [
     "You are a machine trained by a human to judge whether workplace instructions are safe to act on.",
     `Training summary: ${summarizeTraining(training)}`,
@@ -91,7 +101,7 @@ async function askGemini({ instruction, verdict, training }) {
   try {
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-goog-api-key": GEMINI_API_KEY },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
@@ -118,8 +128,10 @@ async function handleReason(req, res, origin) {
   try {
     payload = JSON.parse(await readBody(req));
   } catch (error) {
+    if (error.tooLarge) return undefined; // the socket was already destroyed; there is no one to answer
     return json(res, 400, { error: "Invalid JSON body" }, origin);
   }
+  if (!payload || typeof payload !== "object") return json(res, 400, { error: "Expected a JSON object" }, origin);
 
   const instruction = String(payload.instruction || "").trim().slice(0, 600);
   const verdict = String(payload.verdict || "").trim().toLowerCase();
@@ -136,7 +148,7 @@ async function handleReason(req, res, origin) {
   }
 }
 
-const server = await import("node:http").then(({ createServer }) => createServer(async (req, res) => {
+export async function handle(req, res) {
   const origin = allowedOrigin(req.headers.origin || "");
 
   if (req.method === "OPTIONS") {
@@ -158,8 +170,13 @@ const server = await import("node:http").then(({ createServer }) => createServer
     return handleReason(req, res, origin);
   }
   return json(res, 404, { error: "Not found" }, origin);
-}));
+}
 
-server.listen(PORT, () => {
-  console.log(`After Turing Gemini proxy listening on ${PORT}`);
-});
+export { allowedOrigin, withinRateLimit, summarizeTraining, cleanReasoning };
+
+// Listen only when run directly (node server.js), so tests can import the handler.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  createServer(handle).listen(PORT, () => {
+    console.log(`After Turing Gemini proxy listening on ${PORT}`);
+  });
+}

@@ -1,0 +1,29 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: 20
+      - name: Game script parses
+        run: |
+          node -e '
+            const html = require("fs").readFileSync("index.html", "utf8");
+            const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]);
+            if (scripts.length !== 1) throw new Error("expected one inline script, found " + scripts.length);
+            new (require("vm").Script)(scripts[0], { filename: "index.html" });
+            console.log("inline script OK");
+          '
+      - name: Proxy syntax
+        run: node --check gemini-proxy/server.js
+      - name: Proxy tests
+        working-directory: gemini-proxy
+        run: npm test
